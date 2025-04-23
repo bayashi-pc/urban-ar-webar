@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>都庁モデルAR</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    body { margin:0; overflow:hidden; }
+    .arjs-loader { 
+      height:100%; width:100%; 
+      position:absolute; top:0; left:0; 
+      background:rgba(0,0,0,0.8); 
+      z-index:9999; 
+      display:flex; 
+      justify-content:center; 
+      align-items:center; 
+    }
+    .arjs-loader div { 
+      color:white; 
+      font-size:1.2em; 
+      text-align: center;
+    }
+    .guide {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      width: 100vw;
+      text-align: center;
+      z-index: 10000;
+      color: #fff;
+      background: rgba(0,0,0,0.6);
+      font-size: 1.1em;
+      padding: 8px 0;
+    }
+    .marker-img {
+      width: 120px;
+      margin: 10px auto;
+      display: block;
+      border: 2px solid #fff;
+      background: #fff;
+    }
+    #scale-slider-wrap {
+      position: absolute; 
+      left: 50%; 
+      bottom: 20px; 
+      transform: translateX(-50%); 
+      background: rgba(0,0,0,.6); 
+      padding: 10px 15px; 
+      border-radius: 8px; 
+      z-index: 10000; 
+      display: none;
+    }
+    #scale-slider {
+      width: 200px;
+      margin-bottom: 5px;
+    }
+    #scale-slider-label {
+      color: #fff;
+      text-align: center;
+      display: block;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディング表示 -->
+  <div class="arjs-loader">
+    <div>
+      モデルを読み込み中です…<br>
+      Loading, please wait...
+    </div>
+  </div>
+  
+  <!-- ガイド部分 -->
+  <div class="guide" id="guide">
+    <b>【ARガイド】</b><br>
+    下のマーカー画像を印刷または別端末で表示し、カメラで映してください。<br>
+    <img src="marker/qrmarker.png" class="marker-img" alt="ARマーカー">
+    <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
+  </div>
+  
+  <!-- スライダーでモデルサイズ調整（マーカー認識後に表示） -->
+  <div id="scale-slider-wrap">
+    <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
+    <label id="scale-slider-label" for="scale-slider">モデルサイズ調整</label>
+  </div>
+  
+  <!-- A-Frame AR.jsシーン -->
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled:false; detectionMode: mono_and_matrix;"
+    renderer="logarithmicDepthBuffer: true; precision: medium;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: true"
+  >
+    <!-- 3Dモデルのアセット -->
+    <a-assets>
+      <a-asset-item id="city" src="model/citymodel.glb"></a-asset-item>
+    </a-assets>
+    
+    <!-- マーカー -->
+    <a-marker type="pattern" url="marker/pattern-qrmarker.patt" id="my-marker">
+      <!-- 3Dモデル -->
+      <a-entity
+        id="model-entity"
+        gltf-model="#city"
+        scale="0.01 0.01 0.01"
+        position="0 0 0"
+        shadow="cast: false; receive: false"
+      ></a-entity>
+    </a-marker>
+    
+    <!-- カメラ -->
+    <a-entity camera></a-entity>
+  </a-scene>
+  
+  <script>
+    // ページ読み込み完了時の処理
+    window.addEventListener('DOMContentLoaded', () => {
+      // 要素の取得
+      const loader = document.querySelector('.arjs-loader');
+      const scene = document.querySelector('a-scene');
+      const guide = document.getElementById('guide');
+      const marker = document.getElementById('my-marker');
+      const modelEntity = document.getElementById('model-entity');
+      const scaleSlider = document.getElementById('scale-slider');
+      const scaleSliderWrap = document.getElementById('scale-slider-wrap');
+      
+      // シーン読み込み完了時にローディング表示を消す
+      scene.addEventListener('loaded', () => {
+        loader.style.display = 'none';
+      });
+      
+      // マーカーが認識されたらガイドを非表示にし、スライダーを表示
+      marker.addEventListener("markerFound", () => {
+        guide.style.display = "none";
+        scaleSliderWrap.style.display = "block";
+        console.log("マーカーを認識しました！");
+      });
+      
+      // マーカーが見失われたら操作パネルを非表示
+      marker.addEventListener("markerLost", () => {
+        scaleSliderWrap.style.display = "none";
+        console.log("マーカーが見えなくなりました");
+      });
+      
+      // スライダーでスケール調整
+      scaleSlider.addEventListener('input', function(e) {
+        const scaleValue = parseFloat(e.target.value);
+        modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
+        console.log(`Scale adjusted to: ${scaleValue}`);
+      });
+      
+      // 初期スケール値をスライダーに反映
+      scaleSlider.value = 0.01;
+      
+      // デバイス検出
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isAndroid = /Android/.test(navigator.userAgent);
+      
+      // スマホ/タブレット用パフォーマンス最適化（必要に応じて）
+      if (isIOS || isAndroid) {
+        // モバイル用の最適化を適用
+        const sceneEl = document.querySelector('a-scene');
+        if (sceneEl.hasLoaded) {
+          optimize();
+        } else {
+          sceneEl.addEventListener('loaded', optimize);
+        }
+        
+        function optimize() {
+          // モバイル向け最適化
+          const renderer = sceneEl.renderer;
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        }
+      }
+    });
+  </script>
+</body>
+</html>
