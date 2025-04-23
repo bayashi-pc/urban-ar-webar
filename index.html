@@ -161,20 +161,20 @@
       const isAndroid = /Android/.test(navigator.userAgent);
       
       // スマホ/タブレット用パフォーマンス最適化（必要に応じて）
-      if (isIOS || isAndroid) {
+   //   if (isIOS || isAndroid) {
         // モバイル用の最適化を適用
-        const sceneEl = document.querySelector('a-scene');
-        if (sceneEl.hasLoaded) {
-          optimize();
-        } else {
-          sceneEl.addEventListener('loaded', optimize);
-        }
+      //  const sceneEl = document.querySelector('a-scene');
+     //   if (sceneEl.hasLoaded) {
+        //  optimize();
+      //  } else {
+    //      sceneEl.addEventListener('loaded', optimize);
+  //      }
         
-        function optimize() {
+     //   function optimize() {
           // モバイル向け最適化
-          const renderer = sceneEl.renderer;
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-        }
+     //     const renderer = sceneEl.renderer;
+    //    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+     //  }
       }
     });
   </script>
