@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>都庁モデルAR（ピンチズーム対応）</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <!-- ピンチジェスチャーを検出するためのコンポーネント -->
+  <script src="https://unpkg.com/aframe-gesture-detector@4.0.6/dist/aframe-gesture-detector.min.js"></script>
+
+  <style>
+    body { margin:0; overflow:hidden; }
+    .arjs-loader { height:100%; width:100%; position:absolute; top:0; left:0; background:rgba(0,0,0,0.8); z-index:9999; display:flex; justify-content:center; align-items:center; }
+    .arjs-loader div { color:white; font-size:1.2em; }
+    .guide {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      width: 100vw;
+      text-align: center;
+      z-index: 10000;
+      color: #fff;
+      background: rgba(0,0,0,0.4);
+      font-size: 1.1em;
+      padding: 8px 0;
+    }
+    .marker-img {
+      width: 120px;
+      margin: 10px auto;
+      display: block;
+      border: 2px solid #fff;
+      background: #fff;
+    }
+    .scale-info {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.4);
+      color: white;
+      text-align: center;
+      padding: 5px 0;
+      font-size: 0.9em;
+      display: none;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div class="arjs-loader"><div>モデルを読み込み中です…<br>Loading, please wait...</div></div>
+  
+  <!-- ガイド部分 -->
+  <div class="guide" id="guide">
+    <b>【ARガイド】</b><br>
+    下のマーカー画像を印刷または別端末で表示し、カメラで映してください。<br>
+    <img src="marker/qrmarker.png" class="marker-img" alt="ARマーカー">
+    <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
+  </div>
+  
+  <!-- ピンチ操作ガイド -->
+  <div class="scale-info" id="scale-info">
+    ピンチイン・アウトでモデルサイズを調整できます
+  </div>
+  
+  <a-scene
+    embedded
+    arjs="debugUIEnabled:false;"
+    renderer="logarithmicDepthBuffer: true;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: true"
+    gesture-detector
+  >
+    <a-assets>
+      <a-asset-item id="city" src="model/citymodel.glb"></a-asset-item>
+    </a-assets>
+    
+    <!-- マーカー -->
+    <a-marker type="pattern" url="marker/pattern-qrmarker.patt" id="my-marker" emitevents="true">
+      <!-- モデルにID追加とgesture-handler -->
+      <a-entity
+        id="model-entity"
+        gltf-model="#city"
+        scale="0.01 0.01 0.01"
+        position="0 0 0"
+      ></a-entity>
+    </a-marker>
+    
+    <a-entity camera></a-entity>
+  </a-scene>
+  
+  <script>
+    // ページ読み込み完了時の処理
+    window.addEventListener('DOMContentLoaded', () => {
+      const loader = document.querySelector('.arjs-loader');
+      const scene = document.querySelector('a-scene');
+      const guide = document.getElementById('guide');
+      const marker = document.getElementById('my-marker');
+      const modelEntity = document.getElementById('model-entity');
+      const scaleInfo = document.getElementById('scale-info');
+      
+      // 基本スケール値と現在のスケール値
+      let baseScale = 0.01;
+      let currentScale = baseScale;
+      
+      // シーン読み込み完了時にローディング表示を消す
+      scene.addEventListener('loaded', () => {
+        loader.style.display = 'none';
+      });
+      
+      // マーカーが認識されたらガイドを非表示にし、操作ガイドを表示
+      marker.addEventListener("markerFound", () => {
+        guide.style.display = "none";
+        scaleInfo.style.display = "block";
+        console.log("マーカーを認識しました！ガイドを非表示にします");
+      });
+      
+      // マーカーが見失われたら操作ガイドを非表示
+      marker.addEventListener("markerLost", () => {
+        scaleInfo.style.display = "none";
+        console.log("マーカーが見えなくなりました");
+      });
+      
+      // ピンチジェスチャーの処理
+      scene.addEventListener('gesture-pinch', (e) => {
+        // マーカーが見えている状態でのみピンチ操作を有効に
+        if (marker.object3D.visible) {
+          handlePinch(e);
+        }
+      });
+      
+      // ピンチジェスチャー移動中の処理
+      scene.addEventListener('gesture-pinch-move', (e) => {
+        // マーカーが見えている状態でのみピンチ操作を有効に
+        if (marker.object3D.visible) {
+          handlePinch(e);
+        }
+      });
+      
+      // ピンチによるスケール処理関数
+      function handlePinch(event) {
+        if (event.detail && event.detail.scale) {
+          // ピンチ操作の強さ（> 1.0でピンチアウト、< 1.0でピンチイン）
+          let pinchScale = event.detail.scale;
+          
+          // 現在のスケール値を更新（前回値と組み合わせて滑らかに）
+          currentScale = Math.max(0.002, Math.min(0.05, currentScale * pinchScale));
+          
+          // モデルのスケールを設定
+          modelEntity.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+          
+          // デバッグ
+          console.log(`Scale: ${currentScale.toFixed(4)}`);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
