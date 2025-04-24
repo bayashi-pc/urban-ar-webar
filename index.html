@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>3軸回転機能付き都庁モデルAR</title>
+  <title>直感的3D操作付き都庁AR</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -42,62 +42,43 @@
       border: 2px solid #fff;
       background: #fff;
     }
-    /* スケールスライダー（左上） */
-    #scale-slider-wrap {
+    /* スケールコントロール（左上） */
+    #scale-control {
       position: absolute;
       left: 20px;
       top: 20px;
-      background: rgba(0,0,0,.6);
-      padding: 10px 15px;
-      border-radius: 8px;
-      z-index: 10000;
-      display: none;
-    }
-    #scale-slider {
-      width: 150px;
-    }
-    #scale-slider-label {
-      color: #fff;
-      font-size: 0.9em;
-      margin-bottom: 5px;
-      display: block;
-    }
-    /* 3軸回転コントロール（右下） */
-    #rotation-controls {
-      position: absolute;
-      right: 20px;
-      bottom: 20px;
       background: rgba(0,0,0,.6);
       padding: 15px;
       border-radius: 8px;
       z-index: 10000;
       display: none;
     }
-    .rotation-axis {
-      margin: 10px 0;
-      color: white;
-    }
-    .axis-label {
-      display: inline-block;
-      width: 60px;
-    }
-    .axis-slider {
+    #scale-slider {
       width: 120px;
-      vertical-align: middle;
     }
     /* 操作ガイド */
-    #rotate-guide {
+    #control-guide {
       position: absolute;
-      bottom: 100px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       color: #fff;
       background: rgba(0,0,0,0.5);
-      padding: 8px 15px;
+      padding: 10px 20px;
       border-radius: 20px;
       font-size: 0.9em;
-      display: none;
       text-align: center;
+      display: none;
+      backdrop-filter: blur(5px);
+    }
+    /* ハイライトエフェクト */
+    .model-highlight {
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { filter: drop-shadow(0 0 5px rgba(52,152,219,0.3)); }
+      50% { filter: drop-shadow(0 0 15px rgba(52,152,219,0.7)); }
+      100% { filter: drop-shadow(0 0 5px rgba(52,152,219,0.3)); }
     }
   </style>
 </head>
@@ -118,34 +99,18 @@
     <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
   </div>
   
-  <!-- スケールスライダー -->
-  <div id="scale-slider-wrap">
-    <label id="scale-slider-label">サイズ調整</label>
+  <!-- スケールコントロール -->
+  <div id="scale-control">
     <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
+    <div style="color:#fff; margin-top:5px; font-size:0.9em;">サイズ調整</div>
   </div>
   
-  <!-- 3軸回転コントロール -->
-  <div id="rotation-controls">
-    <div class="rotation-axis">
-      <span class="axis-label">X軸回転</span>
-      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-x">
-    </div>
-    <div class="rotation-axis">
-      <span class="axis-label">Y軸回転</span>
-      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-y">
-    </div>
-    <div class="rotation-axis">
-      <span class="axis-label">Z軸回転</span>
-      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-z">
-    </div>
-  </div>
-
   <!-- 操作ガイド -->
-  <div id="rotate-guide">
-    ✨ 指でモデルを直接ドラッグして回転できます
+  <div id="control-guide">
+    ✨ 指で自由に回転・ダブルタップでリセット ✨
   </div>
 
-  <!-- A-Frame AR.jsシーン -->
+  <!-- A-Frameシーン -->
   <a-scene
     embedded
     arjs="sourceType: webcam; debugUIEnabled:false; detectionMode: mono_and_matrix;"
@@ -164,7 +129,7 @@
         scale="0.01 0.01 0.01"
         position="0 0 0"
         rotation="0 0 0"
-        three-axis-rotation
+        intuitive-rotation
         shadow="cast: false; receive: false"
       ></a-entity>
     </a-marker>
@@ -173,66 +138,71 @@
   </a-scene>
 
   <script>
-    // 3軸回転カスタムコンポーネント
-    AFRAME.registerComponent('three-axis-rotation', {
+    // 直感的回転コンポーネント
+    AFRAME.registerComponent('intuitive-rotation', {
       schema: {
-        sensitivity: {default: 0.3},
-        invertX: {default: false},
-        invertY: {default: true}
+        sensitivity: { default: 0.3 },
+        invertX: { default: false },
+        invertY: { default: true }
       },
       init: function() {
-        this.rotation = {x: 0, y: 0, z: 0};
+        this.rotation = { x: 0, y: 0 };
         this.isDragging = false;
-        this.startPos = {x: 0, y: 0};
-        
-        const canvas = this.el.sceneEl.canvas;
-        
-        // タッチイベント
-        canvas.addEventListener('touchstart', (e) => this.handleStart(e));
-        canvas.addEventListener('touchmove', (e) => this.handleMove(e));
-        canvas.addEventListener('touchend', () => this.handleEnd());
-        
-        // マウスイベント
-        canvas.addEventListener('mousedown', (e) => this.handleStart(e));
-        canvas.addEventListener('mousemove', (e) => this.handleMove(e));
-        canvas.addEventListener('mouseup', () => this.handleEnd());
+        this.startPos = { x: 0, y: 0 };
+        this.hammer = null;
+
+        this.el.sceneEl.addEventListener('loaded', () => {
+          const canvas = this.el.sceneEl.canvas;
+          
+          // Hammer.js設定
+          this.hammer = new Hammer(canvas);
+          this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+          this.hammer.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
+
+          // イベントリスナー
+          this.hammer.on('panstart', (e) => this.handleStart(e));
+          this.hammer.on('panmove', (e) => this.handleMove(e));
+          this.hammer.on('panend', () => this.handleEnd());
+          this.hammer.on('doubletap', () => this.resetRotation());
+        });
       },
       handleStart: function(e) {
         this.isDragging = true;
-        const pos = e.touches ? e.touches[0] : e;
-        this.startPos = {
-          x: pos.clientX,
-          y: pos.clientY
-        };
+        this.startPos = { x: e.center.x, y: e.center.y };
+        this.el.classList.add('model-highlight');
       },
       handleMove: function(e) {
         if (!this.isDragging) return;
-        
-        const pos = e.touches ? e.touches[0] : e;
-        const deltaX = pos.clientX - this.startPos.x;
-        const deltaY = pos.clientY - this.startPos.y;
-        
-        // 回転量計算（感度調整＆反転オプション）
-        this.rotation.y += deltaX * this.data.sensitivity * (this.data.invertX ? -1 : 1);
-        this.rotation.x += deltaY * this.data.sensitivity * (this.data.invertY ? -1 : 1);
-        
-        // 回転角度制限
-        this.rotation.x = this.rotation.x % 360;
-        this.rotation.y = this.rotation.y % 360;
-        
+
+        // デルタ値計算
+        const deltaX = (e.center.x - this.startPos.x) * this.data.sensitivity;
+        const deltaY = (e.center.y - this.startPos.y) * this.data.sensitivity;
+
+        // 複合回転計算
+        this.rotation.y += this.data.invertX ? -deltaX : deltaX;
+        this.rotation.x += this.data.invertY ? deltaY : -deltaY;
+
+        // 角度正規化
+        this.rotation.x = ((this.rotation.x % 360) + 360) % 360;
+        this.rotation.y = ((this.rotation.y % 360) + 360) % 360;
+
+        // 回転適用
         this.el.setAttribute('rotation', {
           x: this.rotation.x,
           y: this.rotation.y,
-          z: this.rotation.z
+          z: 0
         });
-        
-        this.startPos = {
-          x: pos.clientX,
-          y: pos.clientY
-        };
+
+        this.startPos = { x: e.center.x, y: e.center.y };
       },
       handleEnd: function() {
         this.isDragging = false;
+        this.el.classList.remove('model-highlight');
+      },
+      resetRotation: function() {
+        this.rotation = { x: 0, y: 0 };
+        this.el.setAttribute('rotation', '0 0 0');
+        this.el.emit('rotation-reset');
       }
     });
 
@@ -244,30 +214,24 @@
       const marker = document.getElementById('my-marker');
       const modelEntity = document.getElementById('model-entity');
       const scaleSlider = document.getElementById('scale-slider');
-      const scaleSliderWrap = document.getElementById('scale-slider-wrap');
-      const rotationControls = document.getElementById('rotation-controls');
-      const rotateGuide = document.getElementById('rotate-guide');
-      const rotateX = document.getElementById('rotate-x');
-      const rotateY = document.getElementById('rotate-y');
-      const rotateZ = document.getElementById('rotate-z');
+      const scaleControl = document.getElementById('scale-control');
+      const controlGuide = document.getElementById('control-guide');
 
       // シーン初期化
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
       });
 
-      // マーカー認識時の処理
+      // マーカー認識処理
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
-        scaleSliderWrap.style.display = "block";
-        rotationControls.style.display = "block";
-        rotateGuide.style.display = "block";
+        scaleControl.style.display = "block";
+        controlGuide.style.display = "block";
       });
 
       marker.addEventListener("markerLost", () => {
-        scaleSliderWrap.style.display = "none";
-        rotationControls.style.display = "none";
-        rotateGuide.style.display = "none";
+        scaleControl.style.display = "none";
+        controlGuide.style.display = "none";
       });
 
       // スケール調整
@@ -276,27 +240,18 @@
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
       });
 
-      // 回転スライダー連動
-      [rotateX, rotateY, rotateZ].forEach((slider, index) => {
-        slider.addEventListener('input', (e) => {
-          const rotations = modelEntity.getAttribute('rotation');
-          rotations[['x','y','z'][index]] = parseFloat(e.target.value);
-          modelEntity.setAttribute('rotation', rotations);
-        });
-      });
-
-      // モデル回転をスライダーに反映
-      modelEntity.addEventListener('componentchanged', (e) => {
-        if (e.detail.name === 'rotation') {
-          const rot = e.detail.newData;
-          rotateX.value = rot.x;
-          rotateY.value = rot.y;
-          rotateZ.value = rot.z;
-        }
-      });
-
       // 初期値設定
       scaleSlider.value = 0.01;
+      modelEntity.setAttribute('intuitive-rotation', {
+        sensitivity: 0.25,
+        invertX: true
+      });
+
+      // 回転リセット時のアニメーション
+      modelEntity.addEventListener('rotation-reset', () => {
+        modelEntity.classList.add('model-highlight');
+        setTimeout(() => modelEntity.classList.remove('model-highlight'), 1000);
+      });
     });
   </script>
 </body>
