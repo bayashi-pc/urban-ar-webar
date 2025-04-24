@@ -41,16 +41,18 @@
       border: 2px solid #fff;
       background: #fff;
     }
-    #scale-slider-wrap {
+    #scale-slider-wrap, #rotation-controls {
       position: absolute; 
       left: 50%; 
-      bottom: 20px; 
-      transform: translateX(-50%); 
+      transform: translateX(-50%);
       background: rgba(0,0,0,.6); 
       padding: 10px 15px; 
       border-radius: 8px; 
       z-index: 10000; 
       display: none;
+    }
+    #scale-slider-wrap {
+      bottom: 80px;
     }
     #scale-slider {
       width: 200px;
@@ -61,6 +63,22 @@
       text-align: center;
       display: block;
       font-size: 0.9em;
+    }
+    #rotation-controls {
+      bottom: 20px;
+      display: none;
+    }
+    .rotation-slider {
+      width: 150px;
+      margin: 5px 0;
+    }
+    .rotation-label {
+      color: #fff;
+      font-size: 0.8em;
+      margin-right: 8px;
+    }
+    .rotation-control {
+      margin-bottom: 4px;
     }
   </style>
 </head>
@@ -87,6 +105,22 @@
     <label id="scale-slider-label" for="scale-slider">モデルサイズ調整</label>
   </div>
   
+  <!-- 回転コントロール（マーカー認識後に表示） -->
+  <div id="rotation-controls">
+    <div class="rotation-control">
+      <label class="rotation-label" for="rotate-x">X軸回転</label>
+      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-x">
+    </div>
+    <div class="rotation-control">
+      <label class="rotation-label" for="rotate-y">Y軸回転</label>
+      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-y">
+    </div>
+    <div class="rotation-control">
+      <label class="rotation-label" for="rotate-z">Z軸回転</label>
+      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-z">
+    </div>
+  </div>
+
   <!-- A-Frame AR.jsシーン -->
   <a-scene
     embedded
@@ -108,6 +142,7 @@
         gltf-model="#city"
         scale="0.01 0.01 0.01"
         position="0 0 0"
+        rotation="0 0 0"
         shadow="cast: false; receive: false"
       ></a-entity>
     </a-marker>
@@ -117,9 +152,7 @@
   </a-scene>
   
   <script>
-    // ページ読み込み完了時の処理
     window.addEventListener('DOMContentLoaded', () => {
-      // 要素の取得
       const loader = document.querySelector('.arjs-loader');
       const scene = document.querySelector('a-scene');
       const guide = document.getElementById('guide');
@@ -127,22 +160,28 @@
       const modelEntity = document.getElementById('model-entity');
       const scaleSlider = document.getElementById('scale-slider');
       const scaleSliderWrap = document.getElementById('scale-slider-wrap');
+      const rotationControls = document.getElementById('rotation-controls');
+      const rotateX = document.getElementById('rotate-x');
+      const rotateY = document.getElementById('rotate-y');
+      const rotateZ = document.getElementById('rotate-z');
       
       // シーン読み込み完了時にローディング表示を消す
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
       });
       
-      // マーカーが認識されたらガイドを非表示にし、スライダーを表示
+      // マーカーが認識されたらガイドを非表示にし、スライダーと回転コントロールを表示
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
         scaleSliderWrap.style.display = "block";
+        rotationControls.style.display = "block";
         console.log("マーカーを認識しました！");
       });
       
       // マーカーが見失われたら操作パネルを非表示
       marker.addEventListener("markerLost", () => {
         scaleSliderWrap.style.display = "none";
+        rotationControls.style.display = "none";
         console.log("マーカーが見えなくなりました");
       });
       
@@ -150,11 +189,25 @@
       scaleSlider.addEventListener('input', function(e) {
         const scaleValue = parseFloat(e.target.value);
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
-        console.log(`Scale adjusted to: ${scaleValue}`);
+        //console.log(`Scale adjusted to: ${scaleValue}`);
       });
-      
-      // 初期スケール値をスライダーに反映
       scaleSlider.value = 0.01;
+
+      // 回転処理
+      function updateRotation() {
+        modelEntity.setAttribute('rotation', 
+          `${rotateX.value} ${rotateY.value} ${rotateZ.value}`
+        );
+      }
+      rotateX.addEventListener('input', updateRotation);
+      rotateY.addEventListener('input', updateRotation);
+      rotateZ.addEventListener('input', updateRotation);
+
+      // 初期値
+      rotateX.value = 0;
+      rotateY.value = 0;
+      rotateZ.value = 0;
+      modelEntity.setAttribute('rotation', '0 0 0');
     });
   </script>
 </body>
