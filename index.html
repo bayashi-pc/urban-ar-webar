@@ -7,7 +7,6 @@
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
-
     body { margin:0; overflow:hidden; }
     .arjs-loader { 
       height:100%; width:100%; 
@@ -143,7 +142,7 @@
   </a-scene>
 
   <script>
-    // ドラッグ回転カスタムコンポーネント
+    // ドラッグ回転カスタムコンポーネント（修正版）
     AFRAME.registerComponent('drag-rotate', {
       schema: { speed: { default: 0.5 } },
       init: function () {
@@ -152,19 +151,46 @@
         this.startX = 0;
         this.currentRotation = 0;
 
-        // タッチイベント
-        this.el.sceneEl.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-        this.el.sceneEl.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-        this.el.sceneEl.canvas.addEventListener('touchend', () => this.handleTouchEnd());
+        // シーン読み込み完了後にイベントリスナーを設定
+        this.el.sceneEl.addEventListener('loaded', () => {
+          const canvas = this.el.sceneEl.canvas;
+          if (!canvas) return;
 
-        // マウスイベント
-        this.el.sceneEl.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.el.sceneEl.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.el.sceneEl.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+          // タッチイベント（スマホ用）
+          canvas.addEventListener('touchstart', (e) => {
+            this.handleTouchStart(e);
+            e.stopPropagation(); // イベント伝播を防止
+          });
+          canvas.addEventListener('touchmove', (e) => {
+            this.handleTouchMove(e);
+            e.stopPropagation();
+          });
+          canvas.addEventListener('touchend', (e) => {
+            this.handleTouchEnd();
+            e.stopPropagation();
+          });
+
+          // マウスイベント（PC用）
+          canvas.addEventListener('mousedown', (e) => {
+            this.handleMouseDown(e);
+            e.preventDefault(); // デフォルト動作を防止
+          });
+          canvas.addEventListener('mousemove', (e) => {
+            this.handleMouseMove(e);
+            e.preventDefault();
+          });
+          canvas.addEventListener('mouseup', (e) => {
+            this.handleMouseUp();
+            e.preventDefault();
+          });
+        });
       },
       handleTouchStart: function (e) {
+        // シングルタッチのみ許可
+        if (e.touches.length !== 1) return;
         this.isDragging = true;
         this.startX = e.touches[0].clientX;
+        console.log('タッチスタート');
       },
       handleTouchMove: function (e) {
         if (!this.isDragging) return;
@@ -172,13 +198,16 @@
         this.currentRotation += deltaX * this.rotationSpeed / 100;
         this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
         this.startX = e.touches[0].clientX;
+        console.log('タッチムーブ:', deltaX);
       },
       handleTouchEnd: function () {
         this.isDragging = false;
+        console.log('タッチエンド');
       },
       handleMouseDown: function (e) {
         this.isDragging = true;
         this.startX = e.clientX;
+        console.log('マウスダウン');
       },
       handleMouseMove: function (e) {
         if (!this.isDragging) return;
@@ -186,9 +215,11 @@
         this.currentRotation += deltaX * this.rotationSpeed / 100;
         this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
         this.startX = e.clientX;
+        console.log('マウスムーブ:', deltaX);
       },
       handleMouseUp: function () {
         this.isDragging = false;
+        console.log('マウスアップ');
       }
     });
 
@@ -206,26 +237,31 @@
 
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
+        console.log('シーンロード完了');
       });
 
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
         scaleSliderWrap.style.display = "block";
         rotationControls.style.display = "block";
+        console.log("マーカー認識");
       });
 
       marker.addEventListener("markerLost", () => {
         scaleSliderWrap.style.display = "none";
         rotationControls.style.display = "none";
+        console.log("マーカー消失");
       });
 
       scaleSlider.addEventListener('input', (e) => {
         const scaleValue = parseFloat(e.target.value);
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
+        console.log('スケール変更:', scaleValue);
       });
 
       rotateY.addEventListener('input', (e) => {
         modelEntity.setAttribute('rotation', `0 ${e.target.value} 0`);
+        console.log('回転変更:', e.target.value);
       });
 
       // 初期値設定
