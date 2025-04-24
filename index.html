@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>360度直感操作付き都庁AR</title>
+  <title>最適化された360度回転機能付き都庁AR</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -57,6 +57,9 @@
       margin: 10px 0;
       color: white;
     }
+    #scale-slider {
+      width: 120px;
+    }
     /* 操作ガイド */
     #rotate-guide {
       position: absolute;
@@ -77,6 +80,18 @@
     .model-highlight {
       filter: drop-shadow(0 0 10px rgba(52,152,219,0.5));
       transition: filter 0.3s ease;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #2980b9;
     }
   </style>
 </head>
@@ -141,21 +156,21 @@
   </a-scene>
 
   <script>
-    // 直感的回転コンポーネント（改良版）
+    // 最適化された回転コンポーネント
     AFRAME.registerComponent('intuitive-rotation', {
       schema: {
-        sensitivity: { default: 0.25 }, // 0.1〜1.0
+        sensitivity: { default: 0.15 }, // 初期感度（0.1〜0.3推奨）
         invertX: { default: true },
         invertY: { default: true },
-        friction: { default: 0.95 }     // 慣性減衰率
+        friction: { default: 0.93 }      // 慣性減衰率
       },
       init: function() {
         this.rotation = { x: 0, y: 0 };
         this.velocity = { x: 0, y: 0 };
         this.isDragging = false;
+        this.lastPosition = { x: 0, y: 0 };
         this.hammer = null;
 
-        // Hammer.js初期化
         this.setupHammer();
       },
       setupHammer: function() {
@@ -163,9 +178,15 @@
         this.hammer = new Hammer(canvas);
         
         // ジェスチャー設定
-        this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
-        this.hammer.add(new Hammer.Press({ time: 1000 }));
+        this.hammer.get('pan').set({ 
+          direction: Hammer.DIRECTION_ALL,
+          threshold: 1,  // 反応閾値を下げる
+          pointers: 1    // シングルタッチのみ
+        });
         
+        // 長押し検出（1秒）
+        this.hammer.add(new Hammer.Press({ time: 1000 }));
+
         // イベントリスナー
         this.hammer.on('panstart', (e) => this.handleStart(e));
         this.hammer.on('panmove', (e) => this.handleMove(e));
@@ -175,34 +196,36 @@
       handleStart: function(e) {
         this.isDragging = true;
         this.velocity = { x: 0, y: 0 };
+        this.lastPosition = { x: e.center.x, y: e.center.y };
         this.el.classList.add('model-highlight');
       },
       handleMove: function(e) {
         if (!this.isDragging) return;
 
-        // デルタ値計算
-        const deltaX = e.deltaX * this.data.sensitivity * (this.data.invertX ? -1 : 1);
-        const deltaY = e.deltaY * this.data.sensitivity * (this.data.invertY ? -1 : 1);
+        // 差分計算
+        const deltaX = (e.center.x - this.lastPosition.x) * this.data.sensitivity * (this.data.invertX ? -1 : 1);
+        const deltaY = (e.center.y - this.lastPosition.y) * this.data.sensitivity * (this.data.invertY ? -1 : 1);
 
-        // 速度更新（慣性計算）
-        this.velocity.x = deltaX * 0.1 + this.velocity.x * 0.9;
-        this.velocity.y = deltaY * 0.1 + this.velocity.y * 0.9;
+        // 速度更新（平滑化）
+        this.velocity.x = deltaX * 0.5 + this.velocity.x * 0.5;
+        this.velocity.y = deltaY * 0.5 + this.velocity.y * 0.5;
 
         // 回転更新
         this.updateRotation(deltaX, deltaY);
+
+        // 最終位置更新
+        this.lastPosition = { x: e.center.x, y: e.center.y };
       },
       handleEnd: function() {
         this.isDragging = false;
         this.el.classList.remove('model-highlight');
-        
-        // 慣性アニメーション
         this.applyInertia();
       },
       updateRotation: function(deltaX, deltaY) {
         this.rotation.y += deltaX;
         this.rotation.x += deltaY;
 
-        // 角度正規化（0-360）
+        // 角度正規化（0-360度）
         this.rotation.x = ((this.rotation.x % 360) + 360) % 360;
         this.rotation.y = ((this.rotation.y % 360) + 360) % 360;
 
@@ -214,11 +237,13 @@
       },
       applyInertia: function() {
         const animate = () => {
+          // 速度が閾値以下になったら停止
           if (Math.abs(this.velocity.x) < 0.1 && Math.abs(this.velocity.y) < 0.1) return;
-          
+
+          // 減速処理
           this.velocity.x *= this.data.friction;
           this.velocity.y *= this.data.friction;
-          
+
           this.updateRotation(this.velocity.x, this.velocity.y);
           requestAnimationFrame(animate);
         };
@@ -267,21 +292,21 @@
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
       });
 
-      // 回転リセット
+      // リセットボタン
       resetButton.addEventListener('click', () => {
         modelEntity.components['intuitive-rotation'].resetRotation();
       });
 
       // 初期設定
       modelEntity.setAttribute('intuitive-rotation', {
-        sensitivity: 0.3,
+        sensitivity: 0.15, // 適切な初期値
         invertX: true,
         invertY: true,
         friction: 0.93
       });
       scaleSlider.value = 0.01;
 
-      // リセット時のアニメーション
+      // リセット時のフィードバック
       modelEntity.addEventListener('rotation-reset', () => {
         modelEntity.classList.add('model-highlight');
         setTimeout(() => modelEntity.classList.remove('model-highlight'), 500);
