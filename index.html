@@ -2,10 +2,11 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>都庁モデルAR</title>
+  <title>都庁モデルAR（直感的回転ハンドル付き）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
   <style>
     body { margin:0; overflow:hidden; }
     .arjs-loader { 
@@ -41,18 +42,16 @@
       border: 2px solid #fff;
       background: #fff;
     }
-    #scale-slider-wrap, #rotation-controls {
+    #scale-slider-wrap {
       position: absolute; 
       left: 50%; 
+      bottom: 80px;
       transform: translateX(-50%);
       background: rgba(0,0,0,.6); 
       padding: 10px 15px; 
       border-radius: 8px; 
       z-index: 10000; 
       display: none;
-    }
-    #scale-slider-wrap {
-      bottom: 80px;
     }
     #scale-slider {
       width: 200px;
@@ -64,21 +63,50 @@
       display: block;
       font-size: 0.9em;
     }
-    #rotation-controls {
+    /* 回転ハンドルUI */
+    #rotate-handle-ui {
+      position: absolute;
+      left: 50%;
       bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 10001;
       display: none;
+      pointer-events: none;
     }
-    .rotation-slider {
-      width: 150px;
-      margin: 5px 0;
+    #rotate-handle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.7);
+      border: 3px solid #3498db;
+      box-shadow: 0 0 8px #3498db;
+      position: relative;
+      pointer-events: auto;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
     }
-    .rotation-label {
-      color: #fff;
-      font-size: 0.8em;
-      margin-right: 8px;
+    #rotate-handle:after {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 4px;
+      background: #3498db;
+      border-radius: 2px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) rotate(0deg);
     }
-    .rotation-control {
-      margin-bottom: 4px;
+    #rotate-guide-label {
+      color: #3498db;
+      font-size: 0.9em;
+      text-align: center;
+      margin-top: 4px;
+      font-weight: bold;
+      text-shadow: 0 0 4px #fff;
     }
   </style>
 </head>
@@ -105,12 +133,10 @@
     <label id="scale-slider-label" for="scale-slider">モデルサイズ調整</label>
   </div>
   
-  <!-- 回転コントロール -->
-  <div id="rotation-controls">
-    <div class="rotation-control">
-      <label class="rotation-label" for="rotate-y">Y軸回転</label>
-      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-y">
-    </div>
+  <!-- 回転ハンドルUI -->
+  <div id="rotate-handle-ui">
+    <div id="rotate-handle"></div>
+    <div id="rotate-guide-label">円をなぞってモデルを回転</div>
   </div>
 
   <!-- A-Frame AR.jsシーン -->
@@ -126,14 +152,12 @@
     </a-assets>
     
     <a-marker type="pattern" url="marker/pattern-qrmarker.patt" id="my-marker">
-      <!-- ドラッグ回転コンポーネントを追加 -->
       <a-entity
         id="model-entity"
         gltf-model="#city"
         scale="0.01 0.01 0.01"
         position="0 0 0"
         rotation="0 0 0"
-        drag-rotate
         shadow="cast: false; receive: false"
       ></a-entity>
     </a-marker>
@@ -142,88 +166,6 @@
   </a-scene>
 
   <script>
-    // ドラッグ回転カスタムコンポーネント（修正版）
-    AFRAME.registerComponent('drag-rotate', {
-      schema: { speed: { default: 0.5 } },
-      init: function () {
-        this.isDragging = false;
-        this.rotationSpeed = this.data.speed;
-        this.startX = 0;
-        this.currentRotation = 0;
-
-        // シーン読み込み完了後にイベントリスナーを設定
-        this.el.sceneEl.addEventListener('loaded', () => {
-          const canvas = this.el.sceneEl.canvas;
-          if (!canvas) return;
-
-          // タッチイベント（スマホ用）
-          canvas.addEventListener('touchstart', (e) => {
-            this.handleTouchStart(e);
-            e.stopPropagation(); // イベント伝播を防止
-          });
-          canvas.addEventListener('touchmove', (e) => {
-            this.handleTouchMove(e);
-            e.stopPropagation();
-          });
-          canvas.addEventListener('touchend', (e) => {
-            this.handleTouchEnd();
-            e.stopPropagation();
-          });
-
-          // マウスイベント（PC用）
-          canvas.addEventListener('mousedown', (e) => {
-            this.handleMouseDown(e);
-            e.preventDefault(); // デフォルト動作を防止
-          });
-          canvas.addEventListener('mousemove', (e) => {
-            this.handleMouseMove(e);
-            e.preventDefault();
-          });
-          canvas.addEventListener('mouseup', (e) => {
-            this.handleMouseUp();
-            e.preventDefault();
-          });
-        });
-      },
-      handleTouchStart: function (e) {
-        // シングルタッチのみ許可
-        if (e.touches.length !== 1) return;
-        this.isDragging = true;
-        this.startX = e.touches[0].clientX;
-        console.log('タッチスタート');
-      },
-      handleTouchMove: function (e) {
-        if (!this.isDragging) return;
-        const deltaX = e.touches[0].clientX - this.startX;
-        this.currentRotation += deltaX * this.rotationSpeed / 100;
-        this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
-        this.startX = e.touches[0].clientX;
-        console.log('タッチムーブ:', deltaX);
-      },
-      handleTouchEnd: function () {
-        this.isDragging = false;
-        console.log('タッチエンド');
-      },
-      handleMouseDown: function (e) {
-        this.isDragging = true;
-        this.startX = e.clientX;
-        console.log('マウスダウン');
-      },
-      handleMouseMove: function (e) {
-        if (!this.isDragging) return;
-        const deltaX = e.clientX - this.startX;
-        this.currentRotation += deltaX * this.rotationSpeed / 100;
-        this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
-        this.startX = e.clientX;
-        console.log('マウスムーブ:', deltaX);
-      },
-      handleMouseUp: function () {
-        this.isDragging = false;
-        console.log('マウスアップ');
-      }
-    });
-
-    // メインスクリプト
     window.addEventListener('DOMContentLoaded', () => {
       const loader = document.querySelector('.arjs-loader');
       const scene = document.querySelector('a-scene');
@@ -232,41 +174,81 @@
       const modelEntity = document.getElementById('model-entity');
       const scaleSlider = document.getElementById('scale-slider');
       const scaleSliderWrap = document.getElementById('scale-slider-wrap');
-      const rotationControls = document.getElementById('rotation-controls');
-      const rotateY = document.getElementById('rotate-y');
+      const rotateHandleUI = document.getElementById('rotate-handle-ui');
+      const rotateHandle = document.getElementById('rotate-handle');
 
+      // ローディング非表示
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
-        console.log('シーンロード完了');
       });
 
+      // マーカー認識時にUI表示
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
         scaleSliderWrap.style.display = "block";
-        rotationControls.style.display = "block";
-        console.log("マーカー認識");
+        rotateHandleUI.style.display = "block";
       });
 
       marker.addEventListener("markerLost", () => {
         scaleSliderWrap.style.display = "none";
-        rotationControls.style.display = "none";
-        console.log("マーカー消失");
+        rotateHandleUI.style.display = "none";
       });
 
+      // スケール調整
       scaleSlider.addEventListener('input', (e) => {
         const scaleValue = parseFloat(e.target.value);
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
-        console.log('スケール変更:', scaleValue);
       });
-
-      rotateY.addEventListener('input', (e) => {
-        modelEntity.setAttribute('rotation', `0 ${e.target.value} 0`);
-        console.log('回転変更:', e.target.value);
-      });
-
-      // 初期値設定
       scaleSlider.value = 0.01;
-      rotateY.value = 0;
+
+      // 回転ハンドル（Hammer.jsでジェスチャー検出）
+      let lastAngle = 0;
+      let currentRotation = 0;
+      let isRotating = false;
+
+      // Hammer.js初期化
+      const hammer = new Hammer(rotateHandle, {
+        recognizers: [
+          [Hammer.Pan, { direction: Hammer.DIRECTION_ALL }]
+        ]
+      });
+
+      // タッチ開始時の中心座標を取得
+      function getCenter(el) {
+        const rect = el.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      }
+
+      // 角度計算
+      function calcAngle(cx, cy, x, y) {
+        return Math.atan2(y - cy, x - cx) * 180 / Math.PI;
+      }
+
+      hammer.on('panstart', function (e) {
+        isRotating = true;
+        const center = getCenter(rotateHandle);
+        lastAngle = calcAngle(center.x, center.y, e.center.x, e.center.y);
+      });
+
+      hammer.on('panmove', function (e) {
+        if (!isRotating) return;
+        const center = getCenter(rotateHandle);
+        const angle = calcAngle(center.x, center.y, e.center.x, e.center.y);
+        let delta = angle - lastAngle;
+        // 0-360度に正規化
+        currentRotation += delta;
+        if (currentRotation > 360) currentRotation -= 360;
+        if (currentRotation < 0) currentRotation += 360;
+        modelEntity.setAttribute('rotation', `0 ${currentRotation} 0`);
+        lastAngle = angle;
+      });
+
+      hammer.on('panend pancancel', function () {
+        isRotating = false;
+      });
     });
   </script>
 </body>
