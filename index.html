@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>直感的3D操作付き都庁AR</title>
+  <title>360度直感操作付き都庁AR</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -42,8 +42,8 @@
       border: 2px solid #fff;
       background: #fff;
     }
-    /* スケールコントロール（左上） */
-    #scale-control {
+    /* コントロールパネル */
+    #control-panel {
       position: absolute;
       left: 20px;
       top: 20px;
@@ -53,32 +53,30 @@
       z-index: 10000;
       display: none;
     }
-    #scale-slider {
-      width: 120px;
+    .control-item {
+      margin: 10px 0;
+      color: white;
     }
     /* 操作ガイド */
-    #control-guide {
+    #rotate-guide {
       position: absolute;
-      bottom: 20px;
+      bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
       color: #fff;
       background: rgba(0,0,0,0.5);
-      padding: 10px 20px;
+      padding: 10px 25px;
       border-radius: 20px;
       font-size: 0.9em;
       text-align: center;
       display: none;
       backdrop-filter: blur(5px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     /* ハイライトエフェクト */
     .model-highlight {
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0% { filter: drop-shadow(0 0 5px rgba(52,152,219,0.3)); }
-      50% { filter: drop-shadow(0 0 15px rgba(52,152,219,0.7)); }
-      100% { filter: drop-shadow(0 0 5px rgba(52,152,219,0.3)); }
+      filter: drop-shadow(0 0 10px rgba(52,152,219,0.5));
+      transition: filter 0.3s ease;
     }
   </style>
 </head>
@@ -99,15 +97,20 @@
     <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
   </div>
   
-  <!-- スケールコントロール -->
-  <div id="scale-control">
-    <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
-    <div style="color:#fff; margin-top:5px; font-size:0.9em;">サイズ調整</div>
+  <!-- コントロールパネル -->
+  <div id="control-panel">
+    <div class="control-item">
+      <label>サイズ調整</label>
+      <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
+    </div>
+    <div class="control-item">
+      <button id="reset-button">回転リセット</button>
+    </div>
   </div>
   
   <!-- 操作ガイド -->
-  <div id="control-guide">
-    ✨ 指で自由に回転・ダブルタップでリセット ✨
+  <div id="rotate-guide">
+    ✨ 指で自由に回転・長押しでリセット ✨
   </div>
 
   <!-- A-Frameシーン -->
@@ -138,71 +141,94 @@
   </a-scene>
 
   <script>
-    // 直感的回転コンポーネント
+    // 直感的回転コンポーネント（改良版）
     AFRAME.registerComponent('intuitive-rotation', {
       schema: {
-        sensitivity: { default: 0.3 },
-        invertX: { default: false },
-        invertY: { default: true }
+        sensitivity: { default: 0.25 }, // 0.1〜1.0
+        invertX: { default: true },
+        invertY: { default: true },
+        friction: { default: 0.95 }     // 慣性減衰率
       },
       init: function() {
         this.rotation = { x: 0, y: 0 };
+        this.velocity = { x: 0, y: 0 };
         this.isDragging = false;
-        this.startPos = { x: 0, y: 0 };
         this.hammer = null;
 
-        this.el.sceneEl.addEventListener('loaded', () => {
-          const canvas = this.el.sceneEl.canvas;
-          
-          // Hammer.js設定
-          this.hammer = new Hammer(canvas);
-          this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
-          this.hammer.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
-
-          // イベントリスナー
-          this.hammer.on('panstart', (e) => this.handleStart(e));
-          this.hammer.on('panmove', (e) => this.handleMove(e));
-          this.hammer.on('panend', () => this.handleEnd());
-          this.hammer.on('doubletap', () => this.resetRotation());
-        });
+        // Hammer.js初期化
+        this.setupHammer();
+      },
+      setupHammer: function() {
+        const canvas = this.el.sceneEl.canvas;
+        this.hammer = new Hammer(canvas);
+        
+        // ジェスチャー設定
+        this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+        this.hammer.add(new Hammer.Press({ time: 1000 }));
+        
+        // イベントリスナー
+        this.hammer.on('panstart', (e) => this.handleStart(e));
+        this.hammer.on('panmove', (e) => this.handleMove(e));
+        this.hammer.on('panend', () => this.handleEnd());
+        this.hammer.on('press', () => this.resetRotation());
       },
       handleStart: function(e) {
         this.isDragging = true;
-        this.startPos = { x: e.center.x, y: e.center.y };
+        this.velocity = { x: 0, y: 0 };
         this.el.classList.add('model-highlight');
       },
       handleMove: function(e) {
         if (!this.isDragging) return;
 
         // デルタ値計算
-        const deltaX = (e.center.x - this.startPos.x) * this.data.sensitivity;
-        const deltaY = (e.center.y - this.startPos.y) * this.data.sensitivity;
+        const deltaX = e.deltaX * this.data.sensitivity * (this.data.invertX ? -1 : 1);
+        const deltaY = e.deltaY * this.data.sensitivity * (this.data.invertY ? -1 : 1);
 
-        // 複合回転計算
-        this.rotation.y += this.data.invertX ? -deltaX : deltaX;
-        this.rotation.x += this.data.invertY ? deltaY : -deltaY;
+        // 速度更新（慣性計算）
+        this.velocity.x = deltaX * 0.1 + this.velocity.x * 0.9;
+        this.velocity.y = deltaY * 0.1 + this.velocity.y * 0.9;
 
-        // 角度正規化
+        // 回転更新
+        this.updateRotation(deltaX, deltaY);
+      },
+      handleEnd: function() {
+        this.isDragging = false;
+        this.el.classList.remove('model-highlight');
+        
+        // 慣性アニメーション
+        this.applyInertia();
+      },
+      updateRotation: function(deltaX, deltaY) {
+        this.rotation.y += deltaX;
+        this.rotation.x += deltaY;
+
+        // 角度正規化（0-360）
         this.rotation.x = ((this.rotation.x % 360) + 360) % 360;
         this.rotation.y = ((this.rotation.y % 360) + 360) % 360;
 
-        // 回転適用
         this.el.setAttribute('rotation', {
           x: this.rotation.x,
           y: this.rotation.y,
           z: 0
         });
-
-        this.startPos = { x: e.center.x, y: e.center.y };
       },
-      handleEnd: function() {
-        this.isDragging = false;
-        this.el.classList.remove('model-highlight');
+      applyInertia: function() {
+        const animate = () => {
+          if (Math.abs(this.velocity.x) < 0.1 && Math.abs(this.velocity.y) < 0.1) return;
+          
+          this.velocity.x *= this.data.friction;
+          this.velocity.y *= this.data.friction;
+          
+          this.updateRotation(this.velocity.x, this.velocity.y);
+          requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
       },
       resetRotation: function() {
         this.rotation = { x: 0, y: 0 };
+        this.velocity = { x: 0, y: 0 };
         this.el.setAttribute('rotation', '0 0 0');
-        this.el.emit('rotation-reset');
+        this.el.emit('rotation-reset', null, false);
       }
     });
 
@@ -214,8 +240,9 @@
       const marker = document.getElementById('my-marker');
       const modelEntity = document.getElementById('model-entity');
       const scaleSlider = document.getElementById('scale-slider');
-      const scaleControl = document.getElementById('scale-control');
-      const controlGuide = document.getElementById('control-guide');
+      const controlPanel = document.getElementById('control-panel');
+      const rotateGuide = document.getElementById('rotate-guide');
+      const resetButton = document.getElementById('reset-button');
 
       // シーン初期化
       scene.addEventListener('loaded', () => {
@@ -225,13 +252,13 @@
       // マーカー認識処理
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
-        scaleControl.style.display = "block";
-        controlGuide.style.display = "block";
+        controlPanel.style.display = "block";
+        rotateGuide.style.display = "block";
       });
 
       marker.addEventListener("markerLost", () => {
-        scaleControl.style.display = "none";
-        controlGuide.style.display = "none";
+        controlPanel.style.display = "none";
+        rotateGuide.style.display = "none";
       });
 
       // スケール調整
@@ -240,17 +267,24 @@
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
       });
 
-      // 初期値設定
-      scaleSlider.value = 0.01;
-      modelEntity.setAttribute('intuitive-rotation', {
-        sensitivity: 0.25,
-        invertX: true
+      // 回転リセット
+      resetButton.addEventListener('click', () => {
+        modelEntity.components['intuitive-rotation'].resetRotation();
       });
 
-      // 回転リセット時のアニメーション
+      // 初期設定
+      modelEntity.setAttribute('intuitive-rotation', {
+        sensitivity: 0.3,
+        invertX: true,
+        invertY: true,
+        friction: 0.93
+      });
+      scaleSlider.value = 0.01;
+
+      // リセット時のアニメーション
       modelEntity.addEventListener('rotation-reset', () => {
         modelEntity.classList.add('model-highlight');
-        setTimeout(() => modelEntity.classList.remove('model-highlight'), 1000);
+        setTimeout(() => modelEntity.classList.remove('model-highlight'), 500);
       });
     });
   </script>
