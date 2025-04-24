@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>都庁モデルAR（直感的回転ハンドル付き）</title>
+  <title>3軸回転機能付き都庁モデルAR</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -42,71 +42,62 @@
       border: 2px solid #fff;
       background: #fff;
     }
+    /* スケールスライダー（左上） */
     #scale-slider-wrap {
-      position: absolute; 
-      left: 50%; 
-      bottom: 80px;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,.6); 
-      padding: 10px 15px; 
-      border-radius: 8px; 
-      z-index: 10000; 
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      background: rgba(0,0,0,.6);
+      padding: 10px 15px;
+      border-radius: 8px;
+      z-index: 10000;
       display: none;
     }
     #scale-slider {
-      width: 200px;
-      margin-bottom: 5px;
+      width: 150px;
     }
     #scale-slider-label {
       color: #fff;
-      text-align: center;
-      display: block;
       font-size: 0.9em;
+      margin-bottom: 5px;
+      display: block;
     }
-    /* 回転ハンドルUI */
-    #rotate-handle-ui {
+    /* 3軸回転コントロール（右下） */
+    #rotation-controls {
       position: absolute;
-      left: 50%;
+      right: 20px;
       bottom: 20px;
-      transform: translateX(-50%);
-      z-index: 10001;
+      background: rgba(0,0,0,.6);
+      padding: 15px;
+      border-radius: 8px;
+      z-index: 10000;
       display: none;
-      pointer-events: none;
     }
-    #rotate-handle {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.7);
-      border: 3px solid #3498db;
-      box-shadow: 0 0 8px #3498db;
-      position: relative;
-      pointer-events: auto;
-      touch-action: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
+    .rotation-axis {
+      margin: 10px 0;
+      color: white;
     }
-    #rotate-handle:after {
-      content: '';
-      display: block;
-      width: 40px;
-      height: 4px;
-      background: #3498db;
-      border-radius: 2px;
+    .axis-label {
+      display: inline-block;
+      width: 60px;
+    }
+    .axis-slider {
+      width: 120px;
+      vertical-align: middle;
+    }
+    /* 操作ガイド */
+    #rotate-guide {
       position: absolute;
+      bottom: 100px;
       left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%) rotate(0deg);
-    }
-    #rotate-guide-label {
-      color: #3498db;
+      transform: translateX(-50%);
+      color: #fff;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 15px;
+      border-radius: 20px;
       font-size: 0.9em;
+      display: none;
       text-align: center;
-      margin-top: 4px;
-      font-weight: bold;
-      text-shadow: 0 0 4px #fff;
     }
   </style>
 </head>
@@ -127,16 +118,31 @@
     <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
   </div>
   
-  <!-- スライダーでモデルサイズ調整 -->
+  <!-- スケールスライダー -->
   <div id="scale-slider-wrap">
+    <label id="scale-slider-label">サイズ調整</label>
     <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
-    <label id="scale-slider-label" for="scale-slider">モデルサイズ調整</label>
   </div>
   
-  <!-- 回転ハンドルUI -->
-  <div id="rotate-handle-ui">
-    <div id="rotate-handle"></div>
-    <div id="rotate-guide-label">円をなぞってモデルを回転</div>
+  <!-- 3軸回転コントロール -->
+  <div id="rotation-controls">
+    <div class="rotation-axis">
+      <span class="axis-label">X軸回転</span>
+      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-x">
+    </div>
+    <div class="rotation-axis">
+      <span class="axis-label">Y軸回転</span>
+      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-y">
+    </div>
+    <div class="rotation-axis">
+      <span class="axis-label">Z軸回転</span>
+      <input type="range" min="0" max="360" value="0" class="axis-slider" id="rotate-z">
+    </div>
+  </div>
+
+  <!-- 操作ガイド -->
+  <div id="rotate-guide">
+    ✨ 指でモデルを直接ドラッグして回転できます
   </div>
 
   <!-- A-Frame AR.jsシーン -->
@@ -158,6 +164,7 @@
         scale="0.01 0.01 0.01"
         position="0 0 0"
         rotation="0 0 0"
+        three-axis-rotation
         shadow="cast: false; receive: false"
       ></a-entity>
     </a-marker>
@@ -166,6 +173,70 @@
   </a-scene>
 
   <script>
+    // 3軸回転カスタムコンポーネント
+    AFRAME.registerComponent('three-axis-rotation', {
+      schema: {
+        sensitivity: {default: 0.3},
+        invertX: {default: false},
+        invertY: {default: true}
+      },
+      init: function() {
+        this.rotation = {x: 0, y: 0, z: 0};
+        this.isDragging = false;
+        this.startPos = {x: 0, y: 0};
+        
+        const canvas = this.el.sceneEl.canvas;
+        
+        // タッチイベント
+        canvas.addEventListener('touchstart', (e) => this.handleStart(e));
+        canvas.addEventListener('touchmove', (e) => this.handleMove(e));
+        canvas.addEventListener('touchend', () => this.handleEnd());
+        
+        // マウスイベント
+        canvas.addEventListener('mousedown', (e) => this.handleStart(e));
+        canvas.addEventListener('mousemove', (e) => this.handleMove(e));
+        canvas.addEventListener('mouseup', () => this.handleEnd());
+      },
+      handleStart: function(e) {
+        this.isDragging = true;
+        const pos = e.touches ? e.touches[0] : e;
+        this.startPos = {
+          x: pos.clientX,
+          y: pos.clientY
+        };
+      },
+      handleMove: function(e) {
+        if (!this.isDragging) return;
+        
+        const pos = e.touches ? e.touches[0] : e;
+        const deltaX = pos.clientX - this.startPos.x;
+        const deltaY = pos.clientY - this.startPos.y;
+        
+        // 回転量計算（感度調整＆反転オプション）
+        this.rotation.y += deltaX * this.data.sensitivity * (this.data.invertX ? -1 : 1);
+        this.rotation.x += deltaY * this.data.sensitivity * (this.data.invertY ? -1 : 1);
+        
+        // 回転角度制限
+        this.rotation.x = this.rotation.x % 360;
+        this.rotation.y = this.rotation.y % 360;
+        
+        this.el.setAttribute('rotation', {
+          x: this.rotation.x,
+          y: this.rotation.y,
+          z: this.rotation.z
+        });
+        
+        this.startPos = {
+          x: pos.clientX,
+          y: pos.clientY
+        };
+      },
+      handleEnd: function() {
+        this.isDragging = false;
+      }
+    });
+
+    // メインスクリプト
     window.addEventListener('DOMContentLoaded', () => {
       const loader = document.querySelector('.arjs-loader');
       const scene = document.querySelector('a-scene');
@@ -174,24 +245,29 @@
       const modelEntity = document.getElementById('model-entity');
       const scaleSlider = document.getElementById('scale-slider');
       const scaleSliderWrap = document.getElementById('scale-slider-wrap');
-      const rotateHandleUI = document.getElementById('rotate-handle-ui');
-      const rotateHandle = document.getElementById('rotate-handle');
+      const rotationControls = document.getElementById('rotation-controls');
+      const rotateGuide = document.getElementById('rotate-guide');
+      const rotateX = document.getElementById('rotate-x');
+      const rotateY = document.getElementById('rotate-y');
+      const rotateZ = document.getElementById('rotate-z');
 
-      // ローディング非表示
+      // シーン初期化
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
       });
 
-      // マーカー認識時にUI表示
+      // マーカー認識時の処理
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
         scaleSliderWrap.style.display = "block";
-        rotateHandleUI.style.display = "block";
+        rotationControls.style.display = "block";
+        rotateGuide.style.display = "block";
       });
 
       marker.addEventListener("markerLost", () => {
         scaleSliderWrap.style.display = "none";
-        rotateHandleUI.style.display = "none";
+        rotationControls.style.display = "none";
+        rotateGuide.style.display = "none";
       });
 
       // スケール調整
@@ -199,56 +275,28 @@
         const scaleValue = parseFloat(e.target.value);
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
       });
+
+      // 回転スライダー連動
+      [rotateX, rotateY, rotateZ].forEach((slider, index) => {
+        slider.addEventListener('input', (e) => {
+          const rotations = modelEntity.getAttribute('rotation');
+          rotations[['x','y','z'][index]] = parseFloat(e.target.value);
+          modelEntity.setAttribute('rotation', rotations);
+        });
+      });
+
+      // モデル回転をスライダーに反映
+      modelEntity.addEventListener('componentchanged', (e) => {
+        if (e.detail.name === 'rotation') {
+          const rot = e.detail.newData;
+          rotateX.value = rot.x;
+          rotateY.value = rot.y;
+          rotateZ.value = rot.z;
+        }
+      });
+
+      // 初期値設定
       scaleSlider.value = 0.01;
-
-      // 回転ハンドル（Hammer.jsでジェスチャー検出）
-      let lastAngle = 0;
-      let currentRotation = 0;
-      let isRotating = false;
-
-      // Hammer.js初期化
-      const hammer = new Hammer(rotateHandle, {
-        recognizers: [
-          [Hammer.Pan, { direction: Hammer.DIRECTION_ALL }]
-        ]
-      });
-
-      // タッチ開始時の中心座標を取得
-      function getCenter(el) {
-        const rect = el.getBoundingClientRect();
-        return {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2
-        };
-      }
-
-      // 角度計算
-      function calcAngle(cx, cy, x, y) {
-        return Math.atan2(y - cy, x - cx) * 180 / Math.PI;
-      }
-
-      hammer.on('panstart', function (e) {
-        isRotating = true;
-        const center = getCenter(rotateHandle);
-        lastAngle = calcAngle(center.x, center.y, e.center.x, e.center.y);
-      });
-
-      hammer.on('panmove', function (e) {
-        if (!isRotating) return;
-        const center = getCenter(rotateHandle);
-        const angle = calcAngle(center.x, center.y, e.center.x, e.center.y);
-        let delta = angle - lastAngle;
-        // 0-360度に正規化
-        currentRotation += delta;
-        if (currentRotation > 360) currentRotation -= 360;
-        if (currentRotation < 0) currentRotation += 360;
-        modelEntity.setAttribute('rotation', `0 ${currentRotation} 0`);
-        lastAngle = angle;
-      });
-
-      hammer.on('panend pancancel', function () {
-        isRotating = false;
-      });
     });
   </script>
 </body>
