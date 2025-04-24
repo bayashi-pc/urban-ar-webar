@@ -7,6 +7,7 @@
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
+
     body { margin:0; overflow:hidden; }
     .arjs-loader { 
       height:100%; width:100%; 
@@ -99,25 +100,17 @@
     <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
   </div>
   
-  <!-- スライダーでモデルサイズ調整（マーカー認識後に表示） -->
+  <!-- スライダーでモデルサイズ調整 -->
   <div id="scale-slider-wrap">
     <input type="range" min="0.005" max="0.05" step="0.001" value="0.01" id="scale-slider">
     <label id="scale-slider-label" for="scale-slider">モデルサイズ調整</label>
   </div>
   
-  <!-- 回転コントロール（マーカー認識後に表示） -->
+  <!-- 回転コントロール -->
   <div id="rotation-controls">
-    <div class="rotation-control">
-      <label class="rotation-label" for="rotate-x">X軸回転</label>
-      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-x">
-    </div>
     <div class="rotation-control">
       <label class="rotation-label" for="rotate-y">Y軸回転</label>
       <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-y">
-    </div>
-    <div class="rotation-control">
-      <label class="rotation-label" for="rotate-z">Z軸回転</label>
-      <input type="range" min="0" max="360" value="0" class="rotation-slider" id="rotate-z">
     </div>
   </div>
 
@@ -129,29 +122,77 @@
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: true"
   >
-    <!-- 3Dモデルのアセット -->
     <a-assets>
       <a-asset-item id="city" src="model/citymodel.glb"></a-asset-item>
     </a-assets>
     
-    <!-- マーカー -->
     <a-marker type="pattern" url="marker/pattern-qrmarker.patt" id="my-marker">
-      <!-- 3Dモデル -->
+      <!-- ドラッグ回転コンポーネントを追加 -->
       <a-entity
         id="model-entity"
         gltf-model="#city"
         scale="0.01 0.01 0.01"
         position="0 0 0"
         rotation="0 0 0"
+        drag-rotate
         shadow="cast: false; receive: false"
       ></a-entity>
     </a-marker>
     
-    <!-- カメラ -->
     <a-entity camera></a-entity>
   </a-scene>
-  
+
   <script>
+    // ドラッグ回転カスタムコンポーネント
+    AFRAME.registerComponent('drag-rotate', {
+      schema: { speed: { default: 0.5 } },
+      init: function () {
+        this.isDragging = false;
+        this.rotationSpeed = this.data.speed;
+        this.startX = 0;
+        this.currentRotation = 0;
+
+        // タッチイベント
+        this.el.sceneEl.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+        this.el.sceneEl.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+        this.el.sceneEl.canvas.addEventListener('touchend', () => this.handleTouchEnd());
+
+        // マウスイベント
+        this.el.sceneEl.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.el.sceneEl.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.el.sceneEl.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+      },
+      handleTouchStart: function (e) {
+        this.isDragging = true;
+        this.startX = e.touches[0].clientX;
+      },
+      handleTouchMove: function (e) {
+        if (!this.isDragging) return;
+        const deltaX = e.touches[0].clientX - this.startX;
+        this.currentRotation += deltaX * this.rotationSpeed / 100;
+        this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
+        this.startX = e.touches[0].clientX;
+      },
+      handleTouchEnd: function () {
+        this.isDragging = false;
+      },
+      handleMouseDown: function (e) {
+        this.isDragging = true;
+        this.startX = e.clientX;
+      },
+      handleMouseMove: function (e) {
+        if (!this.isDragging) return;
+        const deltaX = e.clientX - this.startX;
+        this.currentRotation += deltaX * this.rotationSpeed / 100;
+        this.el.setAttribute('rotation', `0 ${this.currentRotation} 0`);
+        this.startX = e.clientX;
+      },
+      handleMouseUp: function () {
+        this.isDragging = false;
+      }
+    });
+
+    // メインスクリプト
     window.addEventListener('DOMContentLoaded', () => {
       const loader = document.querySelector('.arjs-loader');
       const scene = document.querySelector('a-scene');
@@ -161,53 +202,35 @@
       const scaleSlider = document.getElementById('scale-slider');
       const scaleSliderWrap = document.getElementById('scale-slider-wrap');
       const rotationControls = document.getElementById('rotation-controls');
-      const rotateX = document.getElementById('rotate-x');
       const rotateY = document.getElementById('rotate-y');
-      const rotateZ = document.getElementById('rotate-z');
-      
-      // シーン読み込み完了時にローディング表示を消す
+
       scene.addEventListener('loaded', () => {
         loader.style.display = 'none';
       });
-      
-      // マーカーが認識されたらガイドを非表示にし、スライダーと回転コントロールを表示
+
       marker.addEventListener("markerFound", () => {
         guide.style.display = "none";
         scaleSliderWrap.style.display = "block";
         rotationControls.style.display = "block";
-        console.log("マーカーを認識しました！");
       });
-      
-      // マーカーが見失われたら操作パネルを非表示
+
       marker.addEventListener("markerLost", () => {
         scaleSliderWrap.style.display = "none";
         rotationControls.style.display = "none";
-        console.log("マーカーが見えなくなりました");
       });
-      
-      // スライダーでスケール調整
-      scaleSlider.addEventListener('input', function(e) {
+
+      scaleSlider.addEventListener('input', (e) => {
         const scaleValue = parseFloat(e.target.value);
         modelEntity.setAttribute('scale', `${scaleValue} ${scaleValue} ${scaleValue}`);
-        //console.log(`Scale adjusted to: ${scaleValue}`);
       });
+
+      rotateY.addEventListener('input', (e) => {
+        modelEntity.setAttribute('rotation', `0 ${e.target.value} 0`);
+      });
+
+      // 初期値設定
       scaleSlider.value = 0.01;
-
-      // 回転処理
-      function updateRotation() {
-        modelEntity.setAttribute('rotation', 
-          `${rotateX.value} ${rotateY.value} ${rotateZ.value}`
-        );
-      }
-      rotateX.addEventListener('input', updateRotation);
-      rotateY.addEventListener('input', updateRotation);
-      rotateZ.addEventListener('input', updateRotation);
-
-      // 初期値
-      rotateX.value = 0;
       rotateY.value = 0;
-      rotateZ.value = 0;
-      modelEntity.setAttribute('rotation', '0 0 0');
     });
   </script>
 </body>
