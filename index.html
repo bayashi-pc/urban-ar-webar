@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>最適化された360度回転機能付き都庁AR</title>
+  <title>かわいこちゃんAR（マーカー）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -109,7 +109,7 @@
     <b>【ARガイド】</b><br>
     下のマーカー画像を印刷または別端末で表示し、カメラで映してください。<br>
     <img src="marker/qrmarker.png" class="marker-img" alt="ARマーカー">
-    <span style="font-size:0.9em;">カメラ使用を許可してください／Allow camera access if prompted.</span>
+    <span style="font-size:0.9em;">カメラ使用を許可してください</span>
   </div>
   
   <!-- コントロールパネル -->
@@ -144,7 +144,7 @@
       <a-entity
         id="model-entity"
         gltf-model="#city"
-        scale="0.01 0.01 0.01"
+        scale="0.1 0.1 0.1"
         position="0 0 0"
         rotation="0 0 0"
         intuitive-rotation
