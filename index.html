@@ -144,7 +144,7 @@
       <a-entity
         id="model-entity"
         gltf-model="#city"
-        scale="0.1 0.1 0.1"
+        scale="1 1 1"
         position="0 0 0"
         rotation="0 0 0"
         intuitive-rotation
@@ -304,7 +304,7 @@
         invertY: true,
         friction: 0.93
       });
-      scaleSlider.value = 0.01;
+      scaleSlider.value = 0.1;
 
       // リセット時のフィードバック
       modelEntity.addEventListener('rotation-reset', () => {
